@@ -140,9 +140,9 @@
 
 <script>
 (() => {
-  const ALL_COLS = ["Date","Description","Category","Amount","Account","Account #","Institution","Month","Week","Transaction ID","Account ID","Check Number","Full Description","Date Added"];
+  const ALL_COLS = ["Date","Description","Category","Amount","Account","Account #","Institution","Month","Week","Transaction ID","Account ID","Check Number","Full Description","Date Added","MetaData","Categorized Date","Reconciled/XFER Date"];
   const DEFAULT_ON = new Set(ALL_COLS);
-  const STORE_KEY = "apple-card-to-tiller:v1";
+  const STORE_KEY = "apple-card-to-tiller:v2";
   const $ = (id) => document.getElementById(id);
 
   // ---------- settings persistence ----------
@@ -359,7 +359,10 @@
         "Account ID": "",
         "Check Number": "",
         "Full Description": t.desc,
-        "Date Added": fmtUS(todayISO)
+        "Date Added": fmtUS(todayISO),
+        "MetaData": "",
+        "Categorized Date": "",
+        "Reconciled/XFER Date": ""
       });
     }
     rows.sort((a, b) => b._date.localeCompare(a._date)); // newest first, like Tiller
