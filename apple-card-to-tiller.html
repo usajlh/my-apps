@@ -356,7 +356,7 @@
         _date: d,
         "Date": fmtUS(d),
         "Description": t.merch,
-        "Category": settings.catsrc === "apple" ? t.cat : "",
+        "Category": autoCategory(t) ?? (settings.catsrc === "apple" ? t.cat : ""),
         "Amount": Math.round(-t.amt * 100) / 100,
         "Account": settings.account,
         "Account #": settings.acctnum,
@@ -375,6 +375,16 @@
     }
     rows.sort((a, b) => b._date.localeCompare(a._date)); // newest first, like Tiller
     return rows;
+  }
+  // Automatic category rules: first match wins, checked against Apple's raw description and merchant.
+  const CATEGORY_RULES = [
+    { startsWith: "ach deposit", category: "Credit Card Payment" }
+  ];
+  function autoCategory(t) {
+    for (const r of CATEGORY_RULES) {
+      if ([t.desc, t.merch].some(v => v.toLowerCase().startsWith(r.startsWith))) return r.category;
+    }
+    return null;
   }
   const activeCols = () => settings.cols.filter(c => c.on).map(c => c.name);
 
