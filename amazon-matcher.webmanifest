@@ -1,6 +1,6 @@
 {
-  "name": "Amazon → Tiller Matcher",
-  "short_name": "Amazon Match",
+  "name": "Amazon → Tiller Splitter",
+  "short_name": "Amazon Split",
   "start_url": "amazon-matcher.html",
   "display": "standalone",
   "background_color": "#f2f2f7",

@@ -6,22 +6,22 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Amazon Match">
+<meta name="apple-mobile-web-app-title" content="Amazon Split">
 <link rel="apple-touch-icon" href="icons/amazon-matcher.png">
 <link rel="manifest" href="amazon-matcher.webmanifest">
-<title>Amazon → Tiller Matcher</title>
+<title>Amazon → Tiller Splitter</title>
 <script src="lib/jszip.min.js"></script>
 <style>
   :root {
     --bg: #f2f2f7; --card: #ffffff; --text: #1c1c1e; --muted: #6e6e73;
     --line: #d8d8dd; --accent: #0a7f5a; --accent-text: #ffffff; --warn: #b3261e;
-    --check: #9a6700; --ok: #0a7f5a;
+    --check: #9a6700; --ok: #0a7f5a; --sub: #f7f7fa;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #000000; --card: #1c1c1e; --text: #f2f2f7; --muted: #98989f;
       --line: #38383a; --accent: #30d18f; --accent-text: #00140c; --warn: #ff6961;
-      --check: #f5c451; --ok: #30d18f;
+      --check: #f5c451; --ok: #30d18f; --sub: #242426;
     }
   }
   * { box-sizing: border-box; }
@@ -45,8 +45,8 @@
   }
   .secondary { background: transparent !important; color: var(--accent) !important; border: 1px solid var(--line) !important; }
   button:disabled { opacity: 0.4; cursor: default; }
-  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
-  @media (max-width: 480px) { .btns { grid-template-columns: 1fr; } }
+  .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+  @media (max-width: 560px) { .btns { grid-template-columns: 1fr; } }
   input[type=file] { display: none; }
   textarea {
     width: 100%; min-height: 120px; font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--text);
@@ -65,13 +65,17 @@
   th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
   th { background: var(--card); color: var(--muted); font-weight: 600; white-space: nowrap; }
   tr:last-child td { border-bottom: 0; }
+  tr.line td { background: var(--sub); border-bottom-style: dashed; }
+  tr.line td:first-child { padding-left: 22px; color: var(--muted); }
+  tr.orig td { font-weight: 600; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   td.nowrap { white-space: nowrap; }
-  td.items { min-width: 260px; }
+  td.items { min-width: 260px; font-weight: normal !important; }
   .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
   .tag.ok { color: var(--ok); border: 1px solid var(--ok); }
   .tag.check { color: var(--check); border: 1px solid var(--check); }
   .tag.none { color: var(--warn); border: 1px solid var(--warn); }
+  .note { display: block; font-size: 12px; color: var(--check); font-weight: normal; margin-top: 2px; }
   ul.filelist { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
   ul.filelist li { padding: 6px 0; border-top: 1px solid var(--line); }
   ul.filelist li span { color: var(--muted); }
@@ -84,48 +88,49 @@
 </head>
 <body>
 <main>
-  <h1>Amazon → Tiller Matcher</h1>
-  <p class="sub">Matches Amazon charges in your Tiller sheet to the items you bought, for the MetaData column. Everything is processed on this device only.</p>
+  <h1>Amazon → Tiller Splitter</h1>
+  <p class="sub">Splits each Amazon charge from your Tiller sheet into one line per product, with item details in MetaData and amounts that add up to the original charge. Everything is processed on this device only.</p>
 
   <section>
     <h2>1 · Get your Amazon order data</h2>
     <ol class="steps">
       <li>Open your Amazon orders page, signed in to the account you want.</li>
       <li>Click the <a href="https://chromewebstore.google.com/detail/mgkilgclilajckgnedgjgnfdokkgnibi" target="_blank" rel="noopener">Amazon Order History Reporter</a> extension icon and pick the period to report (e.g. this year).</li>
-      <li>When the report finishes, download it as CSV.</li>
+      <li>Download two CSVs from the report: the <b>orders</b> view (matches each charge) and the <b>items</b> view (gives per-item prices for splitting).</li>
       <li>For a second account, sign in to it and repeat.</li>
     </ol>
     <a class="linkbtn" href="https://www.amazon.com/gp/css/order-history" target="_blank" rel="noopener">Open Amazon orders page</a>
-    <p class="hint">Backup option without the extension: <a href="https://www.amazon.com/hz/privacy-central/data-requests/preview.html" target="_blank" rel="noopener">Request Your Data</a> from Amazon, choose <b>Your Orders</b>, and confirm the email. The download link arrives by email, from a few hours to a few days later; the .zip works here as-is.</p>
+    <p class="hint">Backup option without the extension: <a href="https://www.amazon.com/hz/privacy-central/data-requests/preview.html" target="_blank" rel="noopener">Request Your Data</a> from Amazon, choose <b>Your Orders</b>, and confirm the email. The download link arrives by email, from a few hours to a few days later; the .zip works here as-is and has everything needed for splitting.</p>
   </section>
 
   <section>
     <h2>2 · Load the Amazon files</h2>
     <label class="filebtn" for="amzfile">Add Amazon export(s) (.zip or .csv)</label>
     <input id="amzfile" type="file" multiple>
-    <p class="hint">One file per Amazon account. Select both at once, or add them one at a time. Files with the same name are fine.</p>
+    <p class="hint">Load the orders and items CSVs for each account. Select them all at once, or add them one at a time. Files with the same name are fine. The extension's transactions view is also accepted.</p>
     <div id="amzstatus" class="status"></div>
     <ul id="amzlist" class="filelist"></ul>
   </section>
 
   <section>
-    <h2>3 · Paste your Tiller rows</h2>
-    <p>In Excel, select a block of rows <b>including the header row</b> (at least Date, Description and Amount; include MetaData to keep existing values). Copy, and paste here.</p>
-    <textarea id="tiller" placeholder="Date	Description	Category	Amount	…" spellcheck="false"></textarea>
-    <p class="hint">Copy a continuous block of rows with no filter applied, since you'll paste the results back into the same rows.</p>
+    <h2>3 · Paste your Tiller Amazon rows</h2>
+    <p>In Excel, filter or select your Amazon transactions and copy the <b>full rows with the header row</b> (all columns, including Amount and MetaData). Paste here.</p>
+    <textarea id="tiller" placeholder="Date	Description	Category	Amount	…	MetaData	…" spellcheck="false"></textarea>
+    <p class="hint">Copying a filtered view is fine. Rows that aren't Amazon charges are ignored.</p>
     <div id="tillerstatus" class="status"></div>
   </section>
 
   <section>
-    <h2>4 · Results</h2>
-    <div id="summary" class="summary">Load the Amazon file and paste Tiller rows to see matches.</div>
+    <h2>4 · Split lines</h2>
+    <div id="summary" class="summary">Load the Amazon files and paste Tiller rows to see results.</div>
     <div class="tablewrap"><table id="results"></table></div>
-    <label class="check"><input id="withOrderId" type="checkbox"> Include Amazon order number</label>
+    <label class="check"><input id="withOrderId" type="checkbox"> Include Amazon order number in MetaData</label>
     <div class="btns">
-      <button id="copy" disabled>Copy MetaData column</button>
+      <button id="copy" disabled>Copy new rows</button>
+      <button id="download" class="secondary" disabled>Download CSV</button>
       <button id="clear" class="secondary">Clear</button>
     </div>
-    <p class="hint">Then click the MetaData cell of the <b>first row you copied</b> (the row under the header) and paste. Every copied row gets a value: the matched items, or its existing MetaData if it wasn't an Amazon charge. "Check" rows matched, but another order had the same amount, so glance at those.</p>
+    <p class="hint">In Excel: delete the original transactions marked <b>Split</b>, then paste the new rows below your last transaction (they have the same columns as what you copied) and sort by date. Rows marked <b>Not found</b> aren't in the output, so keep those originals. <b>Check</b> means it matched, but glance at the split before you use it.</p>
   </section>
 </main>
 <div id="toast" class="toast"></div>
@@ -168,14 +173,13 @@
     for (const c of cands) { const i = h.indexOf(norm(c)); if (i >= 0) return i; }
     return -1;
   }
-  const pad = (n) => String(n).padStart(2, "0");
   function toDay(s) { // -> days since epoch (UTC), or NaN
-    s = String(s || "").trim(); if (!s) return NaN;
+    s = String(s || "").replace(/ /g, " ").trim(); if (!s) return NaN;
     let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
     if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]) / 864e5;
     m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
     if (m) { let y = +m[3]; if (y < 100) y += 2000; return Date.UTC(y, +m[1] - 1, +m[2]) / 864e5; }
-    const d = Date.parse(s); // "September 3, 2026" etc.
+    const d = Date.parse(s); // "September 3, 2026", "3 September 2026"
     if (!isNaN(d)) { const dt = new Date(d); return Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()) / 864e5; }
     return NaN;
   }
@@ -190,87 +194,121 @@
     return n;
   }
   const cents = (n) => Math.round(n * 100);
-  const fmtMoney = (n) => (n < 0 ? "-" : "") + "$" + Math.abs(n).toFixed(2);
+  const fmtMoney = (c) => (c < 0 ? "-" : "") + "$" + (Math.abs(c) / 100).toFixed(2);
+  const fmtPlain = (c) => (c < 0 ? "-" : "") + (Math.abs(c) / 100).toFixed(2);
 
-  // ---------------- Amazon parsing ----------------
-  // orders: Map orderId -> { id, date, items: [{key, name, cents, ship}], payments: [{day, cents}] }
+  // Split total (integer cents) across weights so the parts sum exactly to total.
+  function allocate(total, weights) {
+    const sign = total < 0 ? -1 : 1, abs = Math.abs(total);
+    let w = weights.map(x => (isFinite(x) && x > 0 ? x : 0));
+    let W = w.reduce((a, b) => a + b, 0);
+    if (!W) { w = weights.map(() => 1); W = w.length; }
+    const raw = w.map(x => abs * x / W);
+    const parts = raw.map(Math.floor);
+    let rem = abs - parts.reduce((a, b) => a + b, 0);
+    raw.map((x, i) => [x - Math.floor(x), i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (rem > 0) { parts[i]++; rem--; } });
+    return parts.map(p => p * sign);
+  }
+
+  // ---------------- Amazon data ----------------
+  // order: { id, date, src:{kind:fileSrc}, items:[official per-item rows with tax-inclusive cents],
+  //          witems:[{key,name,qty,price}], names:[], total, tax, ship, payments:[{day,cents}] }
   let orders = new Map();
-  let amzFiles = []; // [{ label, orders, sig }]
+  let amzFiles = [];
   let fileSeq = 0;
   function sigOf(text) { let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193); return (h >>> 0) + ":" + text.length; }
 
-  function getOrder(id, date, src) {
+  function getOrder(id, date) {
     let o = orders.get(id);
-    if (!o) { o = { id, date, items: [], payments: [], src }; orders.set(id, o); }
+    if (!o) { o = { id, date, src: {}, items: [], witems: [], names: [], total: NaN, tax: NaN, ship: NaN, payments: [] }; orders.set(id, o); }
     if (!isNaN(date) && (isNaN(o.date) || date < o.date)) o.date = date;
     return o;
   }
+  // Each kind of data for an order is taken from the first file that provides it,
+  // so overlapping exports don't double-count.
+  function claim(o, kind, src) { if (o.src[kind] && o.src[kind] !== src) return false; o.src[kind] = src; return true; }
+  function addPayment(o, day, c) {
+    if (isNaN(c) || !c) return;
+    if (!o.payments.some(p => p.cents === c && (p.day === day || isNaN(p.day) || isNaN(day)))) o.payments.push({ day, cents: c });
+  }
 
-  // Returns number of orders added. Orders already loaded from another file are skipped,
-  // so overlapping exports don't double-count items.
-  function ingestCSV(text, name) {
-    const src = ++fileSeq;
-    const seen = new Set();
+  // Returns { kind, orders } for one CSV
+  function ingestCSV(text) {
+    const src = ++fileSeq; const touched = new Set();
     const rows = parseDelimited(text, ",").filter(r => r.some(v => v.trim() !== ""));
-    if (rows.length < 2) return 0;
+    if (rows.length < 2) return { kind: "", orders: 0 };
     const h = rows[0];
+    const col = (...c) => findCol(h, ...c);
+    const get = (r, i) => (i >= 0 ? (r[i] || "").replace(/ /g, " ").trim() : "");
     const ix = {
-      id: findCol(h, "Order ID", "OrderId", "order id"),
-      date: findCol(h, "Order Date", "OrderDate", "date"),
-      name: findCol(h, "Product Name", "ProductName", "Title"),
-      owed: findCol(h, "Total Owed", "Total Amount", "Item Total", "TransactionAmount", "Total"),
-      unit: findCol(h, "Unit Price", "OurPrice"),
-      unitTax: findCol(h, "Unit Price Tax", "OurPriceTax"),
-      qty: findCol(h, "Quantity", "Original Quantity", "QuantityOrdered"),
-      ship: findCol(h, "Ship Date", "Shipment Date"),
-      status: findCol(h, "Order Status", "OrderStatus"),
-      items: findCol(h, "items"),
-      payments: findCol(h, "payments")
+      id: col("Order ID", "OrderId"), ids: col("order ids"),
+      date: col("Order Date", "OrderDate", "date"),
+      pname: col("Product Name", "ProductName"), desc: col("description"),
+      owed: col("Total Owed"), unit: col("Unit Price"), unitTax: col("Unit Price Tax"),
+      qty: col("Quantity", "Original Quantity"), shipDate: col("Ship Date"), status: col("Order Status"),
+      items: col("items"), total: col("total"), tax: col("tax", "VAT", "GST"), shipping: col("shipping"),
+      payments: col("payments"), price: col("price"), amount: col("amount")
     };
-    if (ix.id < 0 || ix.date < 0) return 0;
-    let n = 0;
-    const get = (r, i) => (i >= 0 ? (r[i] || "").trim() : "");
 
-    if (ix.name >= 0) {
-      // Official Amazon export: one row per item
-      rows.slice(1).forEach((r, rowNum) => {
-        const id = get(r, ix.id); if (!id) return;
-        if (/cancel/i.test(get(r, ix.status))) return;
-        const date = toDay(get(r, ix.date));
+    // Official Amazon export: one row per item, tax-inclusive "Total Owed"
+    if (ix.id >= 0 && ix.pname >= 0 && (ix.owed >= 0 || ix.unit >= 0)) {
+      rows.slice(1).forEach((r, n) => {
+        const id = get(r, ix.id); if (!id || /cancel/i.test(get(r, ix.status))) return;
         let amt = money(get(r, ix.owed));
-        if (isNaN(amt)) {
-          const u = money(get(r, ix.unit)), t = money(get(r, ix.unitTax)) || 0, q = money(get(r, ix.qty)) || 1;
-          if (!isNaN(u)) amt = (u + t) * q;
-        }
+        const q = money(get(r, ix.qty)) || 1;
+        if (isNaN(amt)) { const u = money(get(r, ix.unit)), t = money(get(r, ix.unitTax)) || 0; if (!isNaN(u)) amt = (u + t) * q; }
         if (isNaN(amt)) return;
-        if (orders.has(id) && orders.get(id).src !== src) return;
-        const o = getOrder(id, date, src); seen.add(id);
-        const ship = toDay(get(r, ix.ship));
-        o.items.push({ key: src + ":" + rowNum, name: get(r, ix.name) || "(item)", cents: cents(amt), ship });
+        const o = getOrder(id, toDay(get(r, ix.date)));
+        if (!claim(o, "official", src)) return;
+        o.items.push({ key: src + ":" + n, name: get(r, ix.pname) || "(item)", qty: q, cents: cents(amt), ship: toDay(get(r, ix.shipDate)) });
+        touched.add(id);
       });
-    } else if (ix.items >= 0) {
-      // Order History Reporter extension: one row per order
-      rows.slice(1).forEach((r, rowNum) => {
-        const id = get(r, ix.id); if (!id) return;
-        const date = toDay(get(r, ix.date));
-        const total = money(get(r, ix.owed));
-        if (orders.has(id) && orders.get(id).src !== src) return;
-        const o = getOrder(id, date, src); seen.add(id);
-        const names = get(r, ix.items).split(/;\s*/).map(s => s.trim()).filter(Boolean);
-        if (!o.items.length)
-          o.items.push({ key: src + ":" + rowNum, name: names.join(" | ") || "(items)", cents: isNaN(total) ? NaN : cents(total), ship: NaN });
-        const p = get(r, ix.payments);
-        if (p) {
-          // entries like "Visa ending in 1234: September 3, 2026: $25.99;"
-          for (const part of p.split(";")) {
-            const am = part.match(/-?\$\s?[\d,]+\.\d{2}/);
-            const dm = part.match(/[A-Z][a-z]+ \d{1,2}, \d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}/);
-            if (am) o.payments.push({ day: dm ? toDay(dm[0]) : NaN, cents: cents(money(am[0])) });
-          }
-        }
-      });
+      return { kind: "Amazon order export", orders: touched.size };
     }
-    return seen.size;
+    // Extension, orders view: one row per order
+    if (ix.id >= 0 && ix.items >= 0) {
+      rows.slice(1).forEach(r => {
+        const id = get(r, ix.id); if (!id) return;
+        const o = getOrder(id, toDay(get(r, ix.date)));
+        if (!claim(o, "orders", src)) return;
+        o.names = get(r, ix.items).split(/;\s*/).map(s => s.trim()).filter(Boolean);
+        o.total = cents(money(get(r, ix.total)));
+        o.tax = cents(money(get(r, ix.tax)));
+        o.ship = cents(money(get(r, ix.shipping)));
+        for (const part of get(r, ix.payments).split(";")) {
+          const am = part.match(/-?[$£€]\s?[\d,]+\.\d{2}/) || part.match(/(?:USD|GBP|EUR|CAD)\s?[\d,]+\.\d{2}/);
+          const dm = part.match(/[A-Z][a-z]+ \d{1,2}, \d{4}|\d{1,2} [A-Z][a-z]+ \d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}/);
+          if (am) addPayment(o, dm ? toDay(dm[0]) : NaN, cents(money(am[0])));
+        }
+        touched.add(id);
+      });
+      return { kind: "orders report", orders: touched.size };
+    }
+    // Extension, items view: one row per item, pre-tax prices
+    if (ix.id >= 0 && ix.desc >= 0 && ix.price >= 0) {
+      rows.slice(1).forEach((r, n) => {
+        const id = get(r, ix.id); if (!id) return;
+        const o = getOrder(id, toDay(get(r, ix.date)));
+        if (!claim(o, "items", src)) return;
+        o.witems.push({ key: src + ":" + n, name: get(r, ix.desc) || "(item)", qty: money(get(r, ix.qty)) || 1, price: cents(money(get(r, ix.price))) });
+        touched.add(id);
+      });
+      return { kind: "items report", orders: touched.size };
+    }
+    // Extension, transactions view: one row per card charge
+    if (ix.ids >= 0 && ix.amount >= 0) {
+      rows.slice(1).forEach(r => {
+        const ids = get(r, ix.ids).split(/[,\s]+/).filter(Boolean);
+        const c = cents(money(get(r, ix.amount))); const day = toDay(get(r, ix.date));
+        if (ids.length !== 1) return; // charges covering several orders can't be split reliably
+        const o = getOrder(ids[0], NaN);
+        if (!claim(o, "txns", src)) return;
+        addPayment(o, day, Math.abs(c));
+        touched.add(ids[0]);
+      });
+      return { kind: "transactions report", orders: touched.size };
+    }
+    return { kind: "", orders: 0 };
   }
 
   $("amzfile").addEventListener("change", async (e) => {
@@ -291,170 +329,265 @@
         } else texts.push(await f.text());
         const sig = texts.map(sigOf).join("|");
         if (amzFiles.some(a => a.sig === sig)) { errs.push(`${f.name}: already loaded`); continue; }
-        let n = 0; for (const t of texts) n += ingestCSV(t, f.name);
-        if (!n) { errs.push(`${f.name}: no new Amazon orders found. Make sure it's an order history export.`); continue; }
-        amzFiles.push({ label: `File ${amzFiles.length + 1}: ${f.name}`, orders: n, sig });
+        let n = 0, kinds = new Set();
+        for (const t of texts) { const r = ingestCSV(t); n += r.orders; if (r.kind) kinds.add(r.kind); }
+        if (!kinds.size) { errs.push(`${f.name}: not a recognized Amazon export`); continue; }
+        amzFiles.push({ label: `${f.name}`, kind: [...kinds].join(", "), orders: n, sig });
       } catch (err) { errs.push(err.message); }
     }
     $("amzlist").innerHTML = "";
     for (const a of amzFiles) {
       const li = document.createElement("li"); li.textContent = a.label + " ";
-      const sp = document.createElement("span"); sp.textContent = `· ${a.orders} orders`; li.appendChild(sp);
+      const sp = document.createElement("span"); sp.textContent = `· ${a.kind} · ${a.orders} orders`; li.appendChild(sp);
       $("amzlist").appendChild(li);
     }
     const days = [...orders.values()].map(o => o.date).filter(d => !isNaN(d));
     const range = days.length ? ` (${fmtDay(Math.min(...days))} – ${fmtDay(Math.max(...days))})` : "";
-    st.textContent = (errs.length ? errs.join(" · ") + " · " : "") + (orders.size ? `${orders.size} orders total${range}.` : "");
-    if (errs.length) st.className = "status err";
+    let warn = "";
+    const vals = [...orders.values()];
+    if (vals.length && vals.some(o => o.names.length || o.payments.length) && !vals.some(o => o.witems.length || o.items.length))
+      warn = " Add the items report too, so charges can be split by product.";
+    st.textContent = (errs.length ? errs.join(" · ") + " · " : "") + (orders.size ? `${orders.size} orders total${range}.` : "") + warn;
+    if (errs.length || warn) st.className = "status err";
     render();
   });
 
   // ---------------- Tiller parsing ----------------
+  let tillerHeader = [], tillerIx = {};
   function parseTiller() {
     const st = $("tillerstatus"); st.className = "status";
     const text = $("tiller").value;
     if (!text.trim()) { st.textContent = ""; return null; }
-    let rows = parseDelimited(text.replace(/\n+$/, ""), "\t");
+    const rows = parseDelimited(text.replace(/\n+$/, ""), "\t").filter(r => r.some(v => v.trim() !== ""));
     const h = rows[0];
     const ix = {
       date: findCol(h, "Date"), desc: findCol(h, "Description"), full: findCol(h, "Full Description"),
-      amt: findCol(h, "Amount"), meta: findCol(h, "MetaData", "Metadata")
+      amt: findCol(h, "Amount"), meta: findCol(h, "MetaData", "Metadata"), tid: findCol(h, "Transaction ID")
     };
-    if (ix.date < 0 || ix.amt < 0 || (ix.desc < 0 && ix.full < 0)) {
+    const missing = [["Date", ix.date], ["Description", ix.desc < 0 && ix.full < 0 ? -1 : 0], ["Amount", ix.amt], ["MetaData", ix.meta]].filter(([, v]) => v < 0).map(([k]) => k);
+    if (missing.length) {
       st.className = "status err";
-      st.textContent = "Couldn't find the Date, Description and Amount columns. Make sure you copied the header row too.";
+      st.textContent = `Couldn't find the ${missing.join(", ")} column${missing.length > 1 ? "s" : ""}. Copy the full rows, including the header row.`;
       return null;
     }
+    tillerHeader = h; tillerIx = ix;
     const data = rows.slice(1).map((r, i) => {
       const g = (k) => (ix[k] >= 0 ? (r[ix[k]] || "").trim() : "");
       const desc = g("desc"), full = g("full");
-      return {
-        i, day: toDay(g("date")), amount: money(g("amt")), desc: desc || full, full,
-        meta: g("meta"), isAmazon: /amazon|amzn/i.test(desc + " " + full)
-      };
+      while (r.length < h.length) r.push("");
+      return { i, row: r, day: toDay(g("date")), amount: money(g("amt")), desc: desc || full,
+               isAmazon: /amazon|amzn/i.test(desc + " " + full) };
     });
     const nAmz = data.filter(d => d.isAmazon).length;
-    st.textContent = `${data.length} rows pasted, ${nAmz} look like Amazon charges.` + (ix.meta < 0 ? " No MetaData column was included, so non-Amazon rows will paste as blank." : "");
+    st.textContent = `${data.length} rows pasted, ${nAmz} look like Amazon charges.`;
     return data;
   }
 
   // ---------------- matching ----------------
-  function candidatesFor(order) {
-    const c = []; const items = order.items.filter(it => !isNaN(it.cents));
-    const label = (its) => its.map(it => it.name).join(" | ");
-    for (const p of order.payments)
-      c.push({ order, cents: p.cents, ref: isNaN(p.day) ? order.date : p.day, prio: 0, items: [], label: label(order.items), kind: "payment" });
-    if (items.length) {
-      const total = items.reduce((s, it) => s + it.cents, 0);
-      // shipments: group by ship date
+  const label = (its) => its.map(it => it.name).join(" | ");
+  function candidatesFor(o) {
+    const c = [];
+    const off = o.items.filter(it => !isNaN(it.cents));
+    for (const p of o.payments)
+      c.push({ order: o, cents: p.cents, ref: isNaN(p.day) ? o.date : p.day, prio: 0, kind: "payment", items: [] });
+    if (off.length) {
+      const total = off.reduce((s, it) => s + it.cents, 0);
       const groups = new Map();
-      for (const it of items) { const k = isNaN(it.ship) ? "?" : it.ship; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+      for (const it of off) { const k = isNaN(it.ship) ? "?" : it.ship; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
       if (groups.size > 1) for (const [k, its] of groups)
-        c.push({ order, cents: its.reduce((s, it) => s + it.cents, 0), ref: k === "?" ? order.date : k, prio: 1, items: its, label: label(its), kind: "shipment" });
-      const lastShip = Math.max(...items.map(it => isNaN(it.ship) ? order.date : it.ship));
-      c.push({ order, cents: total, ref: isNaN(lastShip) ? order.date : lastShip, prio: groups.size > 1 ? 2 : 1, items, label: label(items), kind: "order" });
-      // subsets of items for split charges (small orders only)
-      if (items.length > 1 && items.length <= 12) {
-        const n = items.length;
+        c.push({ order: o, cents: its.reduce((s, it) => s + it.cents, 0), ref: k === "?" ? o.date : k, prio: 1, kind: "official", items: its });
+      const ships = off.map(it => it.ship).filter(d => !isNaN(d));
+      c.push({ order: o, cents: total, ref: ships.length ? Math.max(...ships) : o.date, prio: groups.size > 1 ? 2 : 1, kind: "official", items: off });
+      if (off.length > 1 && off.length <= 12) {
+        const n = off.length;
         for (let mask = 1; mask < (1 << n) - 1; mask++) {
-          const its = items.filter((_, b) => mask & (1 << b));
-          if (its.length === n) continue;
-          const ships = its.map(it => it.ship).filter(d => !isNaN(d));
-          c.push({ order, cents: its.reduce((s, it) => s + it.cents, 0), ref: ships.length ? Math.max(...ships) : order.date, prio: 3, items: its, label: label(its), kind: "subset" });
+          const its = off.filter((_, b) => mask & (1 << b));
+          const sh = its.map(it => it.ship).filter(d => !isNaN(d));
+          c.push({ order: o, cents: its.reduce((s, it) => s + it.cents, 0), ref: sh.length ? Math.max(...sh) : o.date, prio: 3, kind: "official", items: its });
         }
       }
+    } else if (!o.payments.length && !isNaN(o.total)) {
+      c.push({ order: o, cents: o.total, ref: o.date, prio: 1, kind: "ordertotal", items: [] });
     }
     return c;
   }
 
+  // Items-only orders (pre-tax prices, no totals): loose match, always flagged.
+  function looseMatch(o, want) {
+    if (!o.witems.length || o.payments.length || !isNaN(o.total) || o.items.length) return false;
+    const sub = o.witems.reduce((s, it) => s + it.price * it.qty, 0);
+    return want >= sub && want <= sub * 1.12 + 1500;
+  }
+
   function match(tiller) {
-    const allCands = [];
-    for (const o of orders.values()) allCands.push(...candidatesFor(o));
+    const all = [];
+    for (const o of orders.values()) all.push(...candidatesFor(o));
     const byCents = new Map();
-    for (const c of allCands) { if (!byCents.has(c.cents)) byCents.set(c.cents, []); byCents.get(c.cents).push(c); }
+    for (const c of all) { if (!byCents.has(c.cents)) byCents.set(c.cents, []); byCents.get(c.cents).push(c); }
 
     const pairs = [];
     for (const t of tiller) {
       if (!t.isAmazon || isNaN(t.amount) || isNaN(t.day)) continue;
-      const refund = t.amount > 0;
-      const want = Math.abs(cents(t.amount));
-      for (const tol of [0, -1, 1, -2, 2]) {
-        for (const c of byCents.get(want + tol) || []) {
-          if (refund && c.kind === "subset" && c.items.length > 1) continue;
-          const lo = c.order.date - 3, hi = c.order.date + (refund ? 150 : 45);
-          if (isNaN(c.order.date) || t.day < lo || t.day > hi) continue;
-          const diff = Math.abs(t.day - (isNaN(c.ref) ? c.order.date : c.ref));
-          pairs.push({ t, c, score: c.prio * 1000 + Math.abs(tol) * 100 + diff, refund });
-        }
+      const refund = t.amount > 0, want = Math.abs(cents(t.amount));
+      for (const tol of [0, -1, 1, -2, 2]) for (const c of byCents.get(want + tol) || []) {
+        if (refund && c.kind === "official" && c.items.length > 1 && c.prio === 3) continue;
+        const od = isNaN(c.order.date) ? c.ref : c.order.date;
+        if (isNaN(od) || t.day < od - 3 || t.day > od + (refund ? 150 : 45)) continue;
+        pairs.push({ t, c, refund, score: c.prio * 1000 + Math.abs(tol) * 100 + Math.abs(t.day - (isNaN(c.ref) ? od : c.ref)) });
+      }
+      if (!refund) for (const o of orders.values()) if (looseMatch(o, want)) {
+        if (isNaN(o.date) || t.day < o.date - 3 || t.day > o.date + 45) continue;
+        pairs.push({ t, c: { order: o, cents: want, ref: o.date, prio: 4, kind: "loose", items: [] }, refund, score: 4000 + Math.abs(t.day - o.date) });
       }
     }
     pairs.sort((a, b) => a.score - b.score);
 
-    const result = new Map(); const usedItems = new Set(); const usedPay = new Set();
+    const result = new Map(), usedItems = new Set(), usedPay = new Set(), usedOrder = new Set();
     for (const p of pairs) {
       if (result.has(p.t.i)) continue;
       if (!p.refund) {
         if (p.c.kind === "payment") { const k = p.c.order.id + ":" + p.c.cents + ":" + p.c.ref; if (usedPay.has(k)) continue; usedPay.add(k); }
-        else { if (p.c.items.some(it => usedItems.has(it.key))) continue; p.c.items.forEach(it => usedItems.add(it.key)); }
+        else if (p.c.kind === "official") { if (p.c.items.some(it => usedItems.has(it.key))) continue; p.c.items.forEach(it => usedItems.add(it.key)); }
+        else { if (usedOrder.has(p.c.order.id)) continue; usedOrder.add(p.c.order.id); }
       }
-      // ambiguous if another, different order offers an equally good candidate
       const rivals = pairs.filter(q => q.t === p.t && q.c.order !== p.c.order && Math.floor(q.score / 100) === Math.floor(p.score / 100) && Math.abs(q.score - p.score) <= 3);
-      result.set(p.t.i, { c: p.c, refund: p.refund, sure: rivals.length === 0 });
+      result.set(p.t.i, { ...p, sure: rivals.length === 0 && p.c.kind !== "loose" });
     }
     return result;
   }
 
+  // ---------------- splitting ----------------
+  // Pre-tax weights for extension items; pick price×qty vs price-as-line-total by whichever fits the order subtotal.
+  function witemWeights(o, its) {
+    const a = its.map(it => it.price * it.qty), b = its.map(it => it.price);
+    if (!isNaN(o.total)) {
+      const target = o.total - (o.tax || 0) - (o.ship || 0);
+      const sa = o.witems.reduce((s, it) => s + it.price * it.qty, 0), sb = o.witems.reduce((s, it) => s + it.price, 0);
+      if (Math.abs(sb - target) < Math.abs(sa - target)) return b;
+    }
+    return a;
+  }
+
+  // Returns { lines: [{cents, name, qty}], note }
+  function split(m, usedW) {
+    const t = m.t, total = cents(t.amount), o = m.c.order;
+    const line = (it, c) => ({ cents: c, name: it.name, qty: it.qty || 1 });
+    if (m.refund) {
+      const its = m.c.items.length ? m.c.items : (o.items.length ? o.items : o.witems);
+      return { lines: [{ cents: total, name: "Refund: " + (label(its) || o.names.join(" | ") || "Amazon order"), qty: 1 }] };
+    }
+    if (m.c.kind === "official") {
+      const parts = allocate(total, m.c.items.map(it => it.cents));
+      return { lines: m.c.items.map((it, i) => line(it, parts[i])) };
+    }
+    // payment / order total / loose: use per-item data if we have it
+    let pool = o.items.length ? o.items.filter(it => !usedW.has(it.key)) : o.witems.filter(it => !usedW.has(it.key));
+    const weightsOf = (its) => o.items.length ? its.map(it => it.cents) : witemWeights(o, its);
+    if (!pool.length) {
+      return { lines: [{ cents: total, name: o.names.join(" | ") || "Amazon order", qty: 1 }],
+               note: o.names.length ? "No per-item prices for this order. Load the items report to split it." : "" };
+    }
+    let chosen = pool, note = "";
+    const allW = weightsOf(o.items.length ? o.items : o.witems).reduce((s, x) => s + x, 0);
+    const paySum = o.payments.reduce((s, p) => s + p.cents, 0) || o.total;
+    if (o.payments.length > 1 && pool.length > 1 && pool.length <= 14 && allW > 0 && paySum > 0) {
+      // order was charged in several parts: find the items that make up this charge
+      const ratio = paySum / allW, want = Math.abs(total), w = weightsOf(pool);
+      let best = null;
+      for (let mask = 1; mask < (1 << pool.length); mask++) {
+        let s = 0; for (let b = 0; b < pool.length; b++) if (mask & (1 << b)) s += w[b];
+        const err = Math.abs(s * ratio - want);
+        if (!best || err < best.err) best = { mask, err };
+      }
+      chosen = pool.filter((_, b) => best.mask & (1 << b));
+      if (best.err > Math.max(50, want * 0.03)) note = "This order was charged in several parts; items for this charge are a best guess.";
+    }
+    chosen.forEach(it => usedW.add(it.key));
+    const parts = allocate(total, weightsOf(chosen));
+    return { lines: chosen.map((it, i) => line(it, parts[i])), note };
+  }
+
   // ---------------- render ----------------
-  let lastOutput = null;
+  let output = null;
+  function metaText(ln, orderId) {
+    return (ln.qty > 1 ? ln.qty + "× " : "") + ln.name + (prefs.withOrderId && orderId ? ` (Order ${orderId})` : "");
+  }
   function render() {
     const tiller = parseTiller();
-    const tbl = $("results"); tbl.innerHTML = ""; lastOutput = null; $("copy").disabled = true;
-    if (!tiller) { $("summary").textContent = "Load the Amazon file and paste Tiller rows to see matches."; return; }
-    if (!orders.size) { $("summary").textContent = "Now load your Amazon export (step 2)."; return; }
+    const tbl = $("results"); tbl.innerHTML = ""; output = null;
+    $("copy").disabled = $("download").disabled = true;
+    if (!tiller) { $("summary").textContent = "Load the Amazon files and paste Tiller rows to see results."; return; }
+    if (!orders.size) { $("summary").textContent = "Now load your Amazon files (step 2)."; return; }
     const res = match(tiller);
-    const out = []; let ok = 0, chk = 0, none = 0;
+    const usedW = new Set();
+    const newRows = []; let nSplit = 0, nCheck = 0, nNone = 0;
+
     const head = tbl.createTHead().insertRow();
-    for (const h of ["Date", "Amount", "Description", "Items → MetaData", ""]) { const th = document.createElement("th"); th.textContent = h; head.appendChild(th); }
+    for (const h of ["Date", "Amount", "Description / item", ""]) { const th = document.createElement("th"); th.textContent = h; head.appendChild(th); }
     const tb = tbl.createTBody();
-    for (const t of tiller) {
-      const m = res.get(t.i);
-      let value = t.meta;
-      if (m) {
-        value = (m.refund ? "Refund: " : "") + m.c.label + (prefs.withOrderId ? ` (Order ${m.c.order.id})` : "");
-        m.sure ? ok++ : chk++;
-      } else if (t.isAmazon) none++;
-      out.push(value);
-      if (!t.isAmazon) continue;
-      const tr = tb.insertRow();
+
+    // process charges in date order so multi-charge orders consume items oldest-first
+    const amz = tiller.filter(t => t.isAmazon).sort((a, b) => (a.day || 0) - (b.day || 0));
+    const splits = new Map();
+    for (const t of amz) { const m = res.get(t.i); if (m) splits.set(t.i, { m, ...split(m, usedW) }); }
+
+    for (const t of tiller.filter(t => t.isAmazon)) {
+      const s = splits.get(t.i);
+      const tr = tb.insertRow(); tr.className = "orig";
       tr.insertCell().textContent = isNaN(t.day) ? "?" : fmtDay(t.day); tr.cells[0].className = "nowrap";
-      const a = tr.insertCell(); a.textContent = isNaN(t.amount) ? "?" : fmtMoney(t.amount); a.className = "num";
-      tr.insertCell().textContent = t.desc;
-      const it = tr.insertCell(); it.className = "items"; it.textContent = m ? value : "No matching order found";
-      const s = tr.insertCell(); const tag = document.createElement("span");
-      tag.className = "tag " + (m ? (m.sure ? "ok" : "check") : "none");
-      tag.textContent = m ? (m.sure ? "Matched" : "Check") : "Not found";
-      s.appendChild(tag);
+      const a = tr.insertCell(); a.className = "num"; a.textContent = isNaN(t.amount) ? "?" : fmtMoney(cents(t.amount));
+      const d = tr.insertCell(); d.textContent = t.desc;
+      const st = tr.insertCell(); const tag = document.createElement("span");
+      if (!s) { tag.className = "tag none"; tag.textContent = "Not found"; nNone++; st.appendChild(tag); continue; }
+      const sure = s.m.sure && !s.note;
+      tag.className = "tag " + (sure ? "ok" : "check"); tag.textContent = sure ? "Split" : "Check";
+      st.appendChild(tag); sure ? nSplit++ : nCheck++;
+      if (s.note || !s.m.sure) {
+        const n = document.createElement("span"); n.className = "note";
+        n.textContent = s.note || (s.m.c.kind === "loose" ? "Matched on items only (no order total); check the amounts." : "Another order had the same amount; matched the closest date.");
+        d.appendChild(n);
+      }
+      const tid = tillerIx.tid >= 0 ? (t.row[tillerIx.tid] || "").trim() : "";
+      s.lines.forEach((ln, k) => {
+        const lr = tb.insertRow(); lr.className = "line";
+        lr.insertCell().textContent = "↳";
+        const la = lr.insertCell(); la.className = "num"; la.textContent = fmtMoney(ln.cents);
+        const li = lr.insertCell(); li.className = "items"; li.colSpan = 2; li.textContent = metaText(ln, s.m.c.order.id);
+        const row = t.row.slice();
+        row[tillerIx.amt] = fmtPlain(ln.cents);
+        row[tillerIx.meta] = metaText(ln, s.m.c.order.id);
+        if (tillerIx.tid >= 0 && tid && k > 0) row[tillerIx.tid] = `${tid}-${k + 1}`;
+        newRows.push(row);
+      });
+      const sum = s.lines.reduce((x, l) => x + l.cents, 0);
+      if (sum !== cents(t.amount)) console.warn("split total mismatch", t, s);
     }
-    $("summary").innerHTML = `<span><b>${ok}</b> matched</span><span><b>${chk}</b> to check</span><span><b>${none}</b> not found</span><span><b>${tiller.length}</b> rows total</span>`;
-    if (none) $("summary").insertAdjacentHTML("beforeend", `<span>Not found is common for Prime, Kindle, Audible and gift cards, or orders outside the export's date range.</span>`);
-    lastOutput = out;
-    $("copy").disabled = !out.length;
+    const lines = newRows.length;
+    $("summary").innerHTML = `<span><b>${nSplit + nCheck}</b> charges → <b>${lines}</b> new rows</span><span><b>${nCheck}</b> to check</span><span><b>${nNone}</b> not found (keep original)</span>`;
+    output = newRows;
+    $("copy").disabled = $("download").disabled = !lines;
   }
 
   let timer;
   $("tiller").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(render, 250); });
 
   $("copy").addEventListener("click", async () => {
-    if (!lastOutput) return;
-    const text = lastOutput.map(v => /[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join("\n");
+    if (!output) return;
+    const text = output.map(r => r.map(v => String(v).replace(/[\t\r\n]+/g, " ")).join("\t")).join("\n");
     try { await navigator.clipboard.writeText(text); }
-    catch {
-      const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta);
-      ta.select(); document.execCommand("copy"); ta.remove();
-    }
-    toast(`Copied ${lastOutput.length} MetaData values`);
+    catch { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
+    toast(`Copied ${output.length} rows`);
   });
-
+  $("download").addEventListener("click", () => {
+    if (!output) return;
+    const esc = (v) => { v = String(v); return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+    const csv = [tillerHeader, ...output].map(r => r.map(esc).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" }));
+    a.download = "tiller-amazon-split.csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
   $("clear").addEventListener("click", () => {
     orders = new Map(); amzFiles = []; $("amzlist").innerHTML = ""; $("tiller").value = ""; $("amzstatus").textContent = ""; render();
   });
