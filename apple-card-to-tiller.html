@@ -86,7 +86,7 @@
   <section>
     <h2>1 · Load CSV</h2>
     <label class="filebtn" for="file">Choose Apple Card CSV file(s)</label>
-    <input id="file" type="file" accept=".csv,text/csv,text/comma-separated-values" multiple>
+    <input id="file" type="file" multiple>
     <div id="status" class="status"></div>
   </section>
 
@@ -164,7 +164,7 @@
       for (const n of ALL_COLS) if (!cols.some(c => c.name === n)) cols.push({ name: n, on: false });
       merged.cols = cols;
       return merged;
-    } catch { return structuredClone(defaults); }
+    } catch { return JSON.parse(JSON.stringify(defaults)); }
   }
   function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch {} }
 
@@ -209,7 +209,7 @@
     const a = settings.cols; [a[i], a[i + d]] = [a[i + d], a[i]];
     save(); drawCols(); render();
   }
-  $("resetCols").addEventListener("click", () => { settings.cols = structuredClone(defaults.cols); save(); drawCols(); render(); });
+  $("resetCols").addEventListener("click", () => { settings.cols = JSON.parse(JSON.stringify(defaults.cols)); save(); drawCols(); render(); });
   drawCols();
 
   // ---------- CSV parsing ----------
@@ -283,7 +283,7 @@
 
   function ingest(text, filename) {
     const rows = parseCSV(text);
-    if (rows.length < 2) throw new Error(`${filename}: no transactions found`);
+    if (rows.length < 2) throw new Error(`${filename}: no transactions found (file is ${text.length} characters)`);
     const hdr = rows[0];
     const ix = {
       tdate: findCol(hdr, "Transaction Date", "Date"),
@@ -296,7 +296,7 @@
       by: findCol(hdr, "Purchased By")
     };
     if (ix.tdate < 0 || ix.amt < 0 || (ix.desc < 0 && ix.merch < 0))
-      throw new Error(`${filename}: doesn't look like an Apple Card export (missing date, amount or description columns)`);
+      throw new Error(`${filename}: doesn't look like an Apple Card export. Header row found: "${hdr.join(", ").slice(0, 200)}"`);
     const out = [];
     for (const r of rows.slice(1)) {
       const get = (i) => (i >= 0 ? (r[i] || "").trim() : "");
@@ -313,11 +313,13 @@
   }
 
   $("file").addEventListener("change", async (e) => {
-    const files = [...e.target.files]; if (!files.length) return;
     const st = $("status"); st.className = "status";
+    const files = [...e.target.files];
+    if (!files.length) { st.textContent = "No file was received from the picker."; return; }
+    st.textContent = "Reading " + files.map(f => f.name).join(", ") + "…";
     const added = []; const errs = [];
     for (const f of files) {
-      try { added.push(...ingest(await f.text(), f.name)); }
+      try { added.push(...ingest(await readText(f), f.name)); }
       catch (err) { errs.push(err.message); }
     }
     // merge with already-loaded, dropping exact duplicates (same file loaded twice)
@@ -327,8 +329,14 @@
     st.textContent = errs.length ? errs.join(" · ") : `Loaded ${files.length} file${files.length > 1 ? "s" : ""}; ${txns.length} transactions total.`;
     if (errs.length) st.className = "status err";
     e.target.value = "";
-    render();
+    try { render(); }
+    catch (err) { st.className = "status err"; st.textContent = "Error: " + err.message; }
   });
+  window.addEventListener("error", (ev) => { const st = $("status"); st.className = "status err"; st.textContent = "Error: " + ev.message; });
+  function readText(f) {
+    if (f.text) return f.text();
+    return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(new Error(f.name + ": couldn't read file")); r.readAsText(f); });
+  }
   const key = (t) => [t.tdate, t.cdate, t.desc, t.amt, t.type, t.by].join("|");
 
   // ---------- output ----------
