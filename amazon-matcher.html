@@ -72,6 +72,9 @@
   .tag.ok { color: var(--ok); border: 1px solid var(--ok); }
   .tag.check { color: var(--check); border: 1px solid var(--check); }
   .tag.none { color: var(--warn); border: 1px solid var(--warn); }
+  ul.filelist { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
+  ul.filelist li { padding: 6px 0; border-top: 1px solid var(--line); }
+  ul.filelist li span { color: var(--muted); }
   .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
   .toast { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
     background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 20px; font-size: 14px;
@@ -96,10 +99,12 @@
   </section>
 
   <section>
-    <h2>2 · Load the Amazon file</h2>
-    <label class="filebtn" for="amzfile">Choose Amazon export (.zip or .csv)</label>
+    <h2>2 · Load the Amazon files</h2>
+    <label class="filebtn" for="amzfile">Add Amazon export(s) (.zip or .csv)</label>
     <input id="amzfile" type="file" multiple>
+    <p class="hint">One file per Amazon account. Select both at once, or add them one at a time. Files with the same name are fine.</p>
     <div id="amzstatus" class="status"></div>
+    <ul id="amzlist" class="filelist"></ul>
   </section>
 
   <section>
@@ -189,16 +194,22 @@
   // ---------------- Amazon parsing ----------------
   // orders: Map orderId -> { id, date, items: [{key, name, cents, ship}], payments: [{day, cents}] }
   let orders = new Map();
-  let amzFiles = [];
+  let amzFiles = []; // [{ label, orders, sig }]
+  let fileSeq = 0;
+  function sigOf(text) { let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193); return (h >>> 0) + ":" + text.length; }
 
-  function getOrder(id, date) {
+  function getOrder(id, date, src) {
     let o = orders.get(id);
-    if (!o) { o = { id, date, items: [], payments: [] }; orders.set(id, o); }
+    if (!o) { o = { id, date, items: [], payments: [], src }; orders.set(id, o); }
     if (!isNaN(date) && (isNaN(o.date) || date < o.date)) o.date = date;
     return o;
   }
 
+  // Returns number of orders added. Orders already loaded from another file are skipped,
+  // so overlapping exports don't double-count items.
   function ingestCSV(text, name) {
+    const src = ++fileSeq;
+    const seen = new Set();
     const rows = parseDelimited(text, ",").filter(r => r.some(v => v.trim() !== ""));
     if (rows.length < 2) return 0;
     const h = rows[0];
@@ -231,10 +242,10 @@
           if (!isNaN(u)) amt = (u + t) * q;
         }
         if (isNaN(amt)) return;
-        const o = getOrder(id, date);
+        if (orders.has(id) && orders.get(id).src !== src) return;
+        const o = getOrder(id, date, src); seen.add(id);
         const ship = toDay(get(r, ix.ship));
-        o.items.push({ key: name + ":" + rowNum, name: get(r, ix.name) || "(item)", cents: cents(amt), ship });
-        n++;
+        o.items.push({ key: src + ":" + rowNum, name: get(r, ix.name) || "(item)", cents: cents(amt), ship });
       });
     } else if (ix.items >= 0) {
       // Order History Reporter extension: one row per order
@@ -242,10 +253,11 @@
         const id = get(r, ix.id); if (!id) return;
         const date = toDay(get(r, ix.date));
         const total = money(get(r, ix.owed));
-        const o = getOrder(id, date);
+        if (orders.has(id) && orders.get(id).src !== src) return;
+        const o = getOrder(id, date, src); seen.add(id);
         const names = get(r, ix.items).split(/;\s*/).map(s => s.trim()).filter(Boolean);
         if (!o.items.length)
-          o.items.push({ key: name + ":" + rowNum, name: names.join(" | ") || "(items)", cents: isNaN(total) ? NaN : cents(total), ship: NaN });
+          o.items.push({ key: src + ":" + rowNum, name: names.join(" | ") || "(items)", cents: isNaN(total) ? NaN : cents(total), ship: NaN });
         const p = get(r, ix.payments);
         if (p) {
           // entries like "Visa ending in 1234: September 3, 2026: $25.99;"
@@ -255,10 +267,9 @@
             if (am) o.payments.push({ day: dm ? toDay(dm[0]) : NaN, cents: cents(money(am[0])) });
           }
         }
-        n++;
       });
     }
-    return n;
+    return seen.size;
   }
 
   $("amzfile").addEventListener("change", async (e) => {
@@ -266,25 +277,33 @@
     const files = [...e.target.files]; e.target.value = "";
     if (!files.length) { st.textContent = "No file was received from the picker."; return; }
     st.textContent = "Reading…";
-    let added = 0; const errs = [];
+    const errs = [];
     for (const f of files) {
       try {
+        let texts = [];
         if (/\.zip$/i.test(f.name) || f.type.includes("zip")) {
-          if (!window.JSZip) throw new Error("Couldn't load the zip reader (are you offline?). Unzip the file and choose the CSV inside instead.");
+          if (!window.JSZip) throw new Error("Couldn't load the zip reader. Unzip the file and choose the CSV inside instead.");
           const zip = await JSZip.loadAsync(await f.arrayBuffer());
           const csvs = Object.values(zip.files).filter(z => !z.dir && /\.csv$/i.test(z.name) && /order|digital/i.test(z.name));
-          for (const z of csvs) added += ingestCSV(await z.async("string"), z.name);
-          if (!csvs.length) errs.push(`${f.name}: no order CSV files inside`);
-        } else {
-          added += ingestCSV(await f.text(), f.name);
-        }
-        amzFiles.push(f.name);
+          if (!csvs.length) { errs.push(`${f.name}: no order CSV files inside`); continue; }
+          for (const z of csvs) texts.push(await z.async("string"));
+        } else texts.push(await f.text());
+        const sig = texts.map(sigOf).join("|");
+        if (amzFiles.some(a => a.sig === sig)) { errs.push(`${f.name}: already loaded`); continue; }
+        let n = 0; for (const t of texts) n += ingestCSV(t, f.name);
+        if (!n) { errs.push(`${f.name}: no new Amazon orders found. Make sure it's an order history export.`); continue; }
+        amzFiles.push({ label: `File ${amzFiles.length + 1}: ${f.name}`, orders: n, sig });
       } catch (err) { errs.push(err.message); }
+    }
+    $("amzlist").innerHTML = "";
+    for (const a of amzFiles) {
+      const li = document.createElement("li"); li.textContent = a.label + " ";
+      const sp = document.createElement("span"); sp.textContent = `· ${a.orders} orders`; li.appendChild(sp);
+      $("amzlist").appendChild(li);
     }
     const days = [...orders.values()].map(o => o.date).filter(d => !isNaN(d));
     const range = days.length ? ` (${fmtDay(Math.min(...days))} – ${fmtDay(Math.max(...days))})` : "";
-    if (!added && !errs.length) errs.push("No Amazon orders found in that file. Make sure it's the \"Your Orders\" export.");
-    st.textContent = errs.length ? errs.join(" · ") : `Loaded ${orders.size} orders${range}.`;
+    st.textContent = (errs.length ? errs.join(" · ") + " · " : "") + (orders.size ? `${orders.size} orders total${range}.` : "");
     if (errs.length) st.className = "status err";
     render();
   });
@@ -436,7 +455,7 @@
   });
 
   $("clear").addEventListener("click", () => {
-    orders = new Map(); amzFiles = []; $("tiller").value = ""; $("amzstatus").textContent = ""; render();
+    orders = new Map(); amzFiles = []; $("amzlist").innerHTML = ""; $("tiller").value = ""; $("amzstatus").textContent = ""; render();
   });
 
   function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); }
