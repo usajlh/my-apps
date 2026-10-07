@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Amazon Match">
+<link rel="apple-touch-icon" href="icons/amazon-matcher.png">
+<link rel="manifest" href="amazon-matcher.webmanifest">
+<title>Amazon → Tiller Matcher</title>
+<script src="lib/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #f2f2f7; --card: #ffffff; --text: #1c1c1e; --muted: #6e6e73;
+    --line: #d8d8dd; --accent: #0a7f5a; --accent-text: #ffffff; --warn: #b3261e;
+    --check: #9a6700; --ok: #0a7f5a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000; --card: #1c1c1e; --text: #f2f2f7; --muted: #98989f;
+      --line: #38383a; --accent: #30d18f; --accent-text: #00140c; --warn: #ff6961;
+      --check: #f5c451; --ok: #30d18f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 8px 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+  section { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  p { margin: 0 0 10px; }
+  a { color: var(--accent); }
+  .linkbtn, button, .filebtn {
+    font: inherit; font-weight: 600; border: 0; border-radius: 12px; padding: 13px 16px;
+    background: var(--accent); color: var(--accent-text); cursor: pointer; width: 100%;
+    display: block; text-align: center; text-decoration: none;
+  }
+  .secondary { background: transparent !important; color: var(--accent) !important; border: 1px solid var(--line) !important; }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  @media (max-width: 480px) { .btns { grid-template-columns: 1fr; } }
+  input[type=file] { display: none; }
+  textarea {
+    width: 100%; min-height: 120px; font: 13px/1.4 ui-monospace, Menlo, Consolas, monospace; color: var(--text);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; resize: vertical;
+  }
+  ol.steps { margin: 0 0 12px; padding-left: 20px; font-size: 15px; }
+  ol.steps li { margin-bottom: 4px; }
+  .status { margin-top: 10px; font-size: 14px; color: var(--muted); min-height: 1.4em; }
+  .status.err { color: var(--warn); }
+  .check { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; font-size: 15px; }
+  .check input { width: 20px; height: 20px; accent-color: var(--accent); }
+  .summary { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+  .summary b { color: var(--text); }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+  th { background: var(--card); color: var(--muted); font-weight: 600; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.nowrap { white-space: nowrap; }
+  td.items { min-width: 260px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+  .tag.ok { color: var(--ok); border: 1px solid var(--ok); }
+  .tag.check { color: var(--check); border: 1px solid var(--check); }
+  .tag.none { color: var(--warn); border: 1px solid var(--warn); }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .toast { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 20px; font-size: 14px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Amazon → Tiller Matcher</h1>
+  <p class="sub">Matches Amazon charges in your Tiller sheet to the items you bought, for the MetaData column. Everything is processed on this device only.</p>
+
+  <section>
+    <h2>1 · Get your Amazon order data</h2>
+    <ol class="steps">
+      <li>Open Amazon's data request page and choose <b>Your Orders</b>, then submit.</li>
+      <li>Confirm the request from Amazon's email. The download link arrives by email, from a few hours to a few days later.</li>
+      <li>Download the file (a .zip is fine, no need to unzip).</li>
+    </ol>
+    <a class="linkbtn" href="https://www.amazon.com/hz/privacy-central/data-requests/preview.html" target="_blank" rel="noopener">Open Amazon "Request Your Data" page</a>
+    <p class="hint">Instant alternative on a PC: the free <a href="https://chromewebstore.google.com/detail/mgkilgclilajckgnedgjgnfdokkgnibi" target="_blank" rel="noopener">Amazon Order History Reporter</a> Chrome extension exports a CSV this app also reads.</p>
+  </section>
+
+  <section>
+    <h2>2 · Load the Amazon file</h2>
+    <label class="filebtn" for="amzfile">Choose Amazon export (.zip or .csv)</label>
+    <input id="amzfile" type="file" multiple>
+    <div id="amzstatus" class="status"></div>
+  </section>
+
+  <section>
+    <h2>3 · Paste your Tiller rows</h2>
+    <p>In Excel, select a block of rows <b>including the header row</b> (at least Date, Description and Amount; include MetaData to keep existing values). Copy, and paste here.</p>
+    <textarea id="tiller" placeholder="Date	Description	Category	Amount	…" spellcheck="false"></textarea>
+    <p class="hint">Copy a continuous block of rows with no filter applied, since you'll paste the results back into the same rows.</p>
+    <div id="tillerstatus" class="status"></div>
+  </section>
+
+  <section>
+    <h2>4 · Results</h2>
+    <div id="summary" class="summary">Load the Amazon file and paste Tiller rows to see matches.</div>
+    <div class="tablewrap"><table id="results"></table></div>
+    <label class="check"><input id="withOrderId" type="checkbox"> Include Amazon order number</label>
+    <div class="btns">
+      <button id="copy" disabled>Copy MetaData column</button>
+      <button id="clear" class="secondary">Clear</button>
+    </div>
+    <p class="hint">Then click the MetaData cell of the <b>first row you copied</b> (the row under the header) and paste. Every copied row gets a value: the matched items, or its existing MetaData if it wasn't an Amazon charge. "Check" rows matched, but another order had the same amount, so glance at those.</p>
+  </section>
+</main>
+<div id="toast" class="toast"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const STORE_KEY = "amazon-matcher:v1";
+  let prefs = { withOrderId: true };
+  try { prefs = { ...prefs, ...JSON.parse(localStorage.getItem(STORE_KEY) || "{}") }; } catch {}
+  const savePrefs = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(prefs)); } catch {} };
+  $("withOrderId").checked = prefs.withOrderId;
+  $("withOrderId").addEventListener("change", () => { prefs.withOrderId = $("withOrderId").checked; savePrefs(); render(); });
+
+  window.addEventListener("error", (ev) => { const st = $("amzstatus"); st.className = "status err"; st.textContent = "Error: " + ev.message; });
+
+  // ---------------- helpers ----------------
+  function parseDelimited(text, delim) {
+    text = text.replace(/^﻿/, "");
+    const rows = []; let row = [], field = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+        else field += ch;
+      } else if (ch === '"' && field === "") q = true;
+      else if (ch === delim) { row.push(field); field = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); field = "";
+        rows.push(row); row = [];
+      } else field += ch;
+    }
+    if (field !== "" || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+  const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  function findCol(headers, ...cands) {
+    const h = headers.map(norm);
+    for (const c of cands) { const i = h.indexOf(norm(c)); if (i >= 0) return i; }
+    return -1;
+  }
+  const pad = (n) => String(n).padStart(2, "0");
+  function toDay(s) { // -> days since epoch (UTC), or NaN
+    s = String(s || "").trim(); if (!s) return NaN;
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]) / 864e5;
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (m) { let y = +m[3]; if (y < 100) y += 2000; return Date.UTC(y, +m[1] - 1, +m[2]) / 864e5; }
+    const d = Date.parse(s); // "September 3, 2026" etc.
+    if (!isNaN(d)) { const dt = new Date(d); return Date.UTC(dt.getFullYear(), dt.getMonth(), dt.getDate()) / 864e5; }
+    return NaN;
+  }
+  const fmtDay = (d) => { const dt = new Date(d * 864e5); return `${dt.getUTCMonth() + 1}/${dt.getUTCDate()}/${dt.getUTCFullYear()}`; };
+  function money(s) {
+    s = String(s ?? "").trim(); if (!s) return NaN;
+    let neg = false;
+    if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+    s = s.replace(/[^0-9.\-]/g, "");
+    if (!s || s === "-" || s === ".") return NaN;
+    let n = parseFloat(s); if (neg) n = -n;
+    return n;
+  }
+  const cents = (n) => Math.round(n * 100);
+  const fmtMoney = (n) => (n < 0 ? "-" : "") + "$" + Math.abs(n).toFixed(2);
+
+  // ---------------- Amazon parsing ----------------
+  // orders: Map orderId -> { id, date, items: [{key, name, cents, ship}], payments: [{day, cents}] }
+  let orders = new Map();
+  let amzFiles = [];
+
+  function getOrder(id, date) {
+    let o = orders.get(id);
+    if (!o) { o = { id, date, items: [], payments: [] }; orders.set(id, o); }
+    if (!isNaN(date) && (isNaN(o.date) || date < o.date)) o.date = date;
+    return o;
+  }
+
+  function ingestCSV(text, name) {
+    const rows = parseDelimited(text, ",").filter(r => r.some(v => v.trim() !== ""));
+    if (rows.length < 2) return 0;
+    const h = rows[0];
+    const ix = {
+      id: findCol(h, "Order ID", "OrderId", "order id"),
+      date: findCol(h, "Order Date", "OrderDate", "date"),
+      name: findCol(h, "Product Name", "ProductName", "Title"),
+      owed: findCol(h, "Total Owed", "Total Amount", "Item Total", "TransactionAmount", "Total"),
+      unit: findCol(h, "Unit Price", "OurPrice"),
+      unitTax: findCol(h, "Unit Price Tax", "OurPriceTax"),
+      qty: findCol(h, "Quantity", "Original Quantity", "QuantityOrdered"),
+      ship: findCol(h, "Ship Date", "Shipment Date"),
+      status: findCol(h, "Order Status", "OrderStatus"),
+      items: findCol(h, "items"),
+      payments: findCol(h, "payments")
+    };
+    if (ix.id < 0 || ix.date < 0) return 0;
+    let n = 0;
+    const get = (r, i) => (i >= 0 ? (r[i] || "").trim() : "");
+
+    if (ix.name >= 0) {
+      // Official Amazon export: one row per item
+      rows.slice(1).forEach((r, rowNum) => {
+        const id = get(r, ix.id); if (!id) return;
+        if (/cancel/i.test(get(r, ix.status))) return;
+        const date = toDay(get(r, ix.date));
+        let amt = money(get(r, ix.owed));
+        if (isNaN(amt)) {
+          const u = money(get(r, ix.unit)), t = money(get(r, ix.unitTax)) || 0, q = money(get(r, ix.qty)) || 1;
+          if (!isNaN(u)) amt = (u + t) * q;
+        }
+        if (isNaN(amt)) return;
+        const o = getOrder(id, date);
+        const ship = toDay(get(r, ix.ship));
+        o.items.push({ key: name + ":" + rowNum, name: get(r, ix.name) || "(item)", cents: cents(amt), ship });
+        n++;
+      });
+    } else if (ix.items >= 0) {
+      // Order History Reporter extension: one row per order
+      rows.slice(1).forEach((r, rowNum) => {
+        const id = get(r, ix.id); if (!id) return;
+        const date = toDay(get(r, ix.date));
+        const total = money(get(r, ix.owed));
+        const o = getOrder(id, date);
+        const names = get(r, ix.items).split(/;\s*/).map(s => s.trim()).filter(Boolean);
+        if (!o.items.length)
+          o.items.push({ key: name + ":" + rowNum, name: names.join(" | ") || "(items)", cents: isNaN(total) ? NaN : cents(total), ship: NaN });
+        const p = get(r, ix.payments);
+        if (p) {
+          // entries like "Visa ending in 1234: September 3, 2026: $25.99;"
+          for (const part of p.split(";")) {
+            const am = part.match(/-?\$\s?[\d,]+\.\d{2}/);
+            const dm = part.match(/[A-Z][a-z]+ \d{1,2}, \d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4}/);
+            if (am) o.payments.push({ day: dm ? toDay(dm[0]) : NaN, cents: cents(money(am[0])) });
+          }
+        }
+        n++;
+      });
+    }
+    return n;
+  }
+
+  $("amzfile").addEventListener("change", async (e) => {
+    const st = $("amzstatus"); st.className = "status";
+    const files = [...e.target.files]; e.target.value = "";
+    if (!files.length) { st.textContent = "No file was received from the picker."; return; }
+    st.textContent = "Reading…";
+    let added = 0; const errs = [];
+    for (const f of files) {
+      try {
+        if (/\.zip$/i.test(f.name) || f.type.includes("zip")) {
+          if (!window.JSZip) throw new Error("Couldn't load the zip reader (are you offline?). Unzip the file and choose the CSV inside instead.");
+          const zip = await JSZip.loadAsync(await f.arrayBuffer());
+          const csvs = Object.values(zip.files).filter(z => !z.dir && /\.csv$/i.test(z.name) && /order|digital/i.test(z.name));
+          for (const z of csvs) added += ingestCSV(await z.async("string"), z.name);
+          if (!csvs.length) errs.push(`${f.name}: no order CSV files inside`);
+        } else {
+          added += ingestCSV(await f.text(), f.name);
+        }
+        amzFiles.push(f.name);
+      } catch (err) { errs.push(err.message); }
+    }
+    const days = [...orders.values()].map(o => o.date).filter(d => !isNaN(d));
+    const range = days.length ? ` (${fmtDay(Math.min(...days))} – ${fmtDay(Math.max(...days))})` : "";
+    if (!added && !errs.length) errs.push("No Amazon orders found in that file. Make sure it's the \"Your Orders\" export.");
+    st.textContent = errs.length ? errs.join(" · ") : `Loaded ${orders.size} orders${range}.`;
+    if (errs.length) st.className = "status err";
+    render();
+  });
+
+  // ---------------- Tiller parsing ----------------
+  function parseTiller() {
+    const st = $("tillerstatus"); st.className = "status";
+    const text = $("tiller").value;
+    if (!text.trim()) { st.textContent = ""; return null; }
+    let rows = parseDelimited(text.replace(/\n+$/, ""), "\t");
+    const h = rows[0];
+    const ix = {
+      date: findCol(h, "Date"), desc: findCol(h, "Description"), full: findCol(h, "Full Description"),
+      amt: findCol(h, "Amount"), meta: findCol(h, "MetaData", "Metadata")
+    };
+    if (ix.date < 0 || ix.amt < 0 || (ix.desc < 0 && ix.full < 0)) {
+      st.className = "status err";
+      st.textContent = "Couldn't find the Date, Description and Amount columns. Make sure you copied the header row too.";
+      return null;
+    }
+    const data = rows.slice(1).map((r, i) => {
+      const g = (k) => (ix[k] >= 0 ? (r[ix[k]] || "").trim() : "");
+      const desc = g("desc"), full = g("full");
+      return {
+        i, day: toDay(g("date")), amount: money(g("amt")), desc: desc || full, full,
+        meta: g("meta"), isAmazon: /amazon|amzn/i.test(desc + " " + full)
+      };
+    });
+    const nAmz = data.filter(d => d.isAmazon).length;
+    st.textContent = `${data.length} rows pasted, ${nAmz} look like Amazon charges.` + (ix.meta < 0 ? " No MetaData column was included, so non-Amazon rows will paste as blank." : "");
+    return data;
+  }
+
+  // ---------------- matching ----------------
+  function candidatesFor(order) {
+    const c = []; const items = order.items.filter(it => !isNaN(it.cents));
+    const label = (its) => its.map(it => it.name).join(" | ");
+    for (const p of order.payments)
+      c.push({ order, cents: p.cents, ref: isNaN(p.day) ? order.date : p.day, prio: 0, items: [], label: label(order.items), kind: "payment" });
+    if (items.length) {
+      const total = items.reduce((s, it) => s + it.cents, 0);
+      // shipments: group by ship date
+      const groups = new Map();
+      for (const it of items) { const k = isNaN(it.ship) ? "?" : it.ship; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+      if (groups.size > 1) for (const [k, its] of groups)
+        c.push({ order, cents: its.reduce((s, it) => s + it.cents, 0), ref: k === "?" ? order.date : k, prio: 1, items: its, label: label(its), kind: "shipment" });
+      const lastShip = Math.max(...items.map(it => isNaN(it.ship) ? order.date : it.ship));
+      c.push({ order, cents: total, ref: isNaN(lastShip) ? order.date : lastShip, prio: groups.size > 1 ? 2 : 1, items, label: label(items), kind: "order" });
+      // subsets of items for split charges (small orders only)
+      if (items.length > 1 && items.length <= 12) {
+        const n = items.length;
+        for (let mask = 1; mask < (1 << n) - 1; mask++) {
+          const its = items.filter((_, b) => mask & (1 << b));
+          if (its.length === n) continue;
+          const ships = its.map(it => it.ship).filter(d => !isNaN(d));
+          c.push({ order, cents: its.reduce((s, it) => s + it.cents, 0), ref: ships.length ? Math.max(...ships) : order.date, prio: 3, items: its, label: label(its), kind: "subset" });
+        }
+      }
+    }
+    return c;
+  }
+
+  function match(tiller) {
+    const allCands = [];
+    for (const o of orders.values()) allCands.push(...candidatesFor(o));
+    const byCents = new Map();
+    for (const c of allCands) { if (!byCents.has(c.cents)) byCents.set(c.cents, []); byCents.get(c.cents).push(c); }
+
+    const pairs = [];
+    for (const t of tiller) {
+      if (!t.isAmazon || isNaN(t.amount) || isNaN(t.day)) continue;
+      const refund = t.amount > 0;
+      const want = Math.abs(cents(t.amount));
+      for (const tol of [0, -1, 1, -2, 2]) {
+        for (const c of byCents.get(want + tol) || []) {
+          if (refund && c.kind === "subset" && c.items.length > 1) continue;
+          const lo = c.order.date - 3, hi = c.order.date + (refund ? 150 : 45);
+          if (isNaN(c.order.date) || t.day < lo || t.day > hi) continue;
+          const diff = Math.abs(t.day - (isNaN(c.ref) ? c.order.date : c.ref));
+          pairs.push({ t, c, score: c.prio * 1000 + Math.abs(tol) * 100 + diff, refund });
+        }
+      }
+    }
+    pairs.sort((a, b) => a.score - b.score);
+
+    const result = new Map(); const usedItems = new Set(); const usedPay = new Set();
+    for (const p of pairs) {
+      if (result.has(p.t.i)) continue;
+      if (!p.refund) {
+        if (p.c.kind === "payment") { const k = p.c.order.id + ":" + p.c.cents + ":" + p.c.ref; if (usedPay.has(k)) continue; usedPay.add(k); }
+        else { if (p.c.items.some(it => usedItems.has(it.key))) continue; p.c.items.forEach(it => usedItems.add(it.key)); }
+      }
+      // ambiguous if another, different order offers an equally good candidate
+      const rivals = pairs.filter(q => q.t === p.t && q.c.order !== p.c.order && Math.floor(q.score / 100) === Math.floor(p.score / 100) && Math.abs(q.score - p.score) <= 3);
+      result.set(p.t.i, { c: p.c, refund: p.refund, sure: rivals.length === 0 });
+    }
+    return result;
+  }
+
+  // ---------------- render ----------------
+  let lastOutput = null;
+  function render() {
+    const tiller = parseTiller();
+    const tbl = $("results"); tbl.innerHTML = ""; lastOutput = null; $("copy").disabled = true;
+    if (!tiller) { $("summary").textContent = "Load the Amazon file and paste Tiller rows to see matches."; return; }
+    if (!orders.size) { $("summary").textContent = "Now load your Amazon export (step 2)."; return; }
+    const res = match(tiller);
+    const out = []; let ok = 0, chk = 0, none = 0;
+    const head = tbl.createTHead().insertRow();
+    for (const h of ["Date", "Amount", "Description", "Items → MetaData", ""]) { const th = document.createElement("th"); th.textContent = h; head.appendChild(th); }
+    const tb = tbl.createTBody();
+    for (const t of tiller) {
+      const m = res.get(t.i);
+      let value = t.meta;
+      if (m) {
+        value = (m.refund ? "Refund: " : "") + m.c.label + (prefs.withOrderId ? ` (Order ${m.c.order.id})` : "");
+        m.sure ? ok++ : chk++;
+      } else if (t.isAmazon) none++;
+      out.push(value);
+      if (!t.isAmazon) continue;
+      const tr = tb.insertRow();
+      tr.insertCell().textContent = isNaN(t.day) ? "?" : fmtDay(t.day); tr.cells[0].className = "nowrap";
+      const a = tr.insertCell(); a.textContent = isNaN(t.amount) ? "?" : fmtMoney(t.amount); a.className = "num";
+      tr.insertCell().textContent = t.desc;
+      const it = tr.insertCell(); it.className = "items"; it.textContent = m ? value : "No matching order found";
+      const s = tr.insertCell(); const tag = document.createElement("span");
+      tag.className = "tag " + (m ? (m.sure ? "ok" : "check") : "none");
+      tag.textContent = m ? (m.sure ? "Matched" : "Check") : "Not found";
+      s.appendChild(tag);
+    }
+    $("summary").innerHTML = `<span><b>${ok}</b> matched</span><span><b>${chk}</b> to check</span><span><b>${none}</b> not found</span><span><b>${tiller.length}</b> rows total</span>`;
+    if (none) $("summary").insertAdjacentHTML("beforeend", `<span>Not found is common for Prime, Kindle, Audible and gift cards, or orders outside the export's date range.</span>`);
+    lastOutput = out;
+    $("copy").disabled = !out.length;
+  }
+
+  let timer;
+  $("tiller").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(render, 250); });
+
+  $("copy").addEventListener("click", async () => {
+    if (!lastOutput) return;
+    const text = lastOutput.map(v => /[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v).join("\n");
+    try { await navigator.clipboard.writeText(text); }
+    catch {
+      const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta);
+      ta.select(); document.execCommand("copy"); ta.remove();
+    }
+    toast(`Copied ${lastOutput.length} MetaData values`);
+  });
+
+  $("clear").addEventListener("click", () => {
+    orders = new Map(); amzFiles = []; $("tiller").value = ""; $("amzstatus").textContent = ""; render();
+  });
+
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); }
+
+  render();
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
