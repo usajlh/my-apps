@@ -1,0 +1,9 @@
+{
+  "name": "Apple Card → Tiller",
+  "short_name": "Card→Tiller",
+  "start_url": "apple-card-to-tiller.html",
+  "display": "standalone",
+  "background_color": "#f2f2f7",
+  "theme_color": "#0a7f5a",
+  "icons": [{ "src": "icons/apple-card-to-tiller.png", "sizes": "180x180", "type": "image/png" }]
+}

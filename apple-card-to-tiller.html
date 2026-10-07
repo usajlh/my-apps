@@ -1,0 +1,440 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Card→Tiller">
+<link rel="apple-touch-icon" href="icons/apple-card-to-tiller.png">
+<link rel="manifest" href="apple-card-to-tiller.webmanifest">
+<title>Apple Card → Tiller</title>
+<style>
+  :root {
+    --bg: #f2f2f7; --card: #ffffff; --text: #1c1c1e; --muted: #6e6e73;
+    --line: #d8d8dd; --accent: #0a7f5a; --accent-text: #ffffff; --warn: #b3261e;
+    --neg: #b3261e; --pos: #0a7f5a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000; --card: #1c1c1e; --text: #f2f2f7; --muted: #98989f;
+      --line: #38383a; --accent: #30d18f; --accent-text: #00140c; --warn: #ff6961;
+      --neg: #ff8a80; --pos: #30d18f;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 26px; margin: 8px 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
+  section { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 14px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 10px; font-weight: 600; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text], input[type=date], select {
+    width: 100%; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+  @media (max-width: 480px) { .row { grid-template-columns: 1fr; } }
+  .check { display: flex; align-items: center; gap: 10px; margin: 12px 0 0; color: var(--text); font-size: 15px; }
+  .check input { width: 20px; height: 20px; accent-color: var(--accent); }
+  button, .filebtn {
+    font: inherit; font-weight: 600; border: 0; border-radius: 12px; padding: 13px 16px;
+    background: var(--accent); color: var(--accent-text); cursor: pointer; width: 100%;
+    display: block; text-align: center;
+  }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--line); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  input[type=file] { display: none; }
+  .status { margin-top: 10px; font-size: 14px; color: var(--muted); min-height: 1.4em; }
+  .status.err { color: var(--warn); }
+  .summary { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin-bottom: 10px; }
+  .summary b { color: var(--text); }
+  .tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+  th { position: sticky; top: 0; background: var(--card); color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.neg { color: var(--neg); } td.pos { color: var(--pos); }
+  ol.cols { list-style: none; margin: 0; padding: 0; }
+  ol.cols li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  ol.cols li:last-child { border-bottom: 0; }
+  ol.cols li .name { flex: 1; }
+  ol.cols li.off .name { color: var(--muted); text-decoration: line-through; }
+  ol.cols button { width: auto; padding: 4px 10px; font-size: 14px; border-radius: 8px; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .toast { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: var(--text); color: var(--bg); padding: 10px 16px; border-radius: 20px; font-size: 14px;
+    opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Apple Card → Tiller</h1>
+  <p class="sub">Converts Apple Card CSV exports into rows for your Tiller Transactions sheet. Files are processed on this device only.</p>
+
+  <section>
+    <h2>1 · Load CSV</h2>
+    <label class="filebtn" for="file">Choose Apple Card CSV file(s)</label>
+    <input id="file" type="file" accept=".csv,text/csv,text/comma-separated-values" multiple>
+    <div id="status" class="status"></div>
+  </section>
+
+  <section>
+    <h2>2 · Settings</h2>
+    <div class="row">
+      <div><label for="account">Account</label><input id="account" type="text"></div>
+      <div><label for="acctnum">Account # (e.g. xxxx1234)</label><input id="acctnum" type="text"></div>
+      <div><label for="institution">Institution</label><input id="institution" type="text"></div>
+      <div>
+        <label for="datesrc">Date to use</label>
+        <select id="datesrc">
+          <option value="clearing">Clearing (posted) date</option>
+          <option value="transaction">Transaction date</option>
+        </select>
+      </div>
+      <div><label for="since">Only include on/after</label><input id="since" type="date"></div>
+      <div>
+        <label for="catsrc">Category</label>
+        <select id="catsrc">
+          <option value="blank">Leave blank (categorize in Tiller)</option>
+          <option value="apple">Use Apple's category</option>
+        </select>
+      </div>
+    </div>
+    <label class="check"><input id="skipPayments" type="checkbox"> Skip card payments (if your checking account already records them)</label>
+    <label class="check"><input id="blankFirst" type="checkbox"> Start each row with an empty column</label>
+    <p class="hint" id="lastImport"></p>
+
+    <details style="margin-top:12px">
+      <summary>Column order (match your Transactions sheet)</summary>
+      <p class="hint">Turn off columns you don't have, and reorder to match your sheet left to right.</p>
+      <ol id="cols" class="cols"></ol>
+      <button class="secondary" id="resetCols" style="margin-top:10px">Reset to default order</button>
+    </details>
+  </section>
+
+  <section>
+    <h2>3 · Output</h2>
+    <div id="summary" class="summary"></div>
+    <div class="tablewrap"><table id="preview"></table></div>
+    <div class="btns">
+      <button id="copy" disabled>Copy rows</button>
+      <button id="download" class="secondary" disabled>Download CSV</button>
+    </div>
+    <label class="check"><input id="withHeader" type="checkbox"> Include header row</label>
+    <p class="hint">Copied rows are tab-separated: click the first empty cell in the Date column (or column A if you use the empty first column) and paste. After pasting, sort the sheet by date if needed.</p>
+  </section>
+</main>
+<div id="toast" class="toast"></div>
+
+<script>
+(() => {
+  const ALL_COLS = ["Date","Description","Category","Amount","Account","Account #","Institution","Month","Week","Transaction ID","Account ID","Check Number","Full Description","Date Added"];
+  const DEFAULT_ON = new Set(ALL_COLS);
+  const STORE_KEY = "apple-card-to-tiller:v1";
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- settings persistence ----------
+  const defaults = {
+    account: "Apple Card", acctnum: "", institution: "Apple Card",
+    datesrc: "clearing", catsrc: "blank", since: "",
+    skipPayments: false, blankFirst: false, withHeader: false,
+    cols: ALL_COLS.map(n => ({ name: n, on: DEFAULT_ON.has(n) })),
+    lastImportDate: ""
+  };
+  let settings = load();
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+      const merged = { ...defaults, ...s };
+      // keep column list valid if names ever change
+      const known = new Set(ALL_COLS);
+      let cols = (merged.cols || []).filter(c => known.has(c.name));
+      for (const n of ALL_COLS) if (!cols.some(c => c.name === n)) cols.push({ name: n, on: false });
+      merged.cols = cols;
+      return merged;
+    } catch { return structuredClone(defaults); }
+  }
+  function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch {} }
+
+  const textFields = ["account","acctnum","institution","since"];
+  const selectFields = ["datesrc","catsrc"];
+  const checkFields = ["skipPayments","blankFirst","withHeader"];
+  for (const f of [...textFields, ...selectFields]) {
+    $(f).value = settings[f];
+    $(f).addEventListener("input", () => { settings[f] = $(f).value; save(); render(); });
+  }
+  for (const f of checkFields) {
+    $(f).checked = settings[f];
+    $(f).addEventListener("change", () => { settings[f] = $(f).checked; save(); render(); });
+  }
+  function showLastImport() {
+    $("lastImport").textContent = settings.lastImportDate
+      ? `Last copied/downloaded batch ran through ${fmtUS(settings.lastImportDate)}. Set "Only include on/after" to avoid duplicates.`
+      : "";
+  }
+  showLastImport();
+
+  // ---------- column editor ----------
+  function drawCols() {
+    const ol = $("cols"); ol.innerHTML = "";
+    settings.cols.forEach((c, i) => {
+      const li = document.createElement("li");
+      if (!c.on) li.className = "off";
+      li.innerHTML = `<input type="checkbox" ${c.on ? "checked" : ""} aria-label="Include ${c.name}">
+        <span class="name"></span>
+        <button class="secondary" aria-label="Move up">↑</button>
+        <button class="secondary" aria-label="Move down">↓</button>`;
+      li.querySelector(".name").textContent = c.name;
+      const [cb, up, down] = [li.querySelector("input"), ...li.querySelectorAll("button")];
+      cb.addEventListener("change", () => { c.on = cb.checked; save(); drawCols(); render(); });
+      up.disabled = i === 0; down.disabled = i === settings.cols.length - 1;
+      up.addEventListener("click", () => move(i, -1));
+      down.addEventListener("click", () => move(i, 1));
+      ol.appendChild(li);
+    });
+  }
+  function move(i, d) {
+    const a = settings.cols; [a[i], a[i + d]] = [a[i + d], a[i]];
+    save(); drawCols(); render();
+  }
+  $("resetCols").addEventListener("click", () => { settings.cols = structuredClone(defaults.cols); save(); drawCols(); render(); });
+  drawCols();
+
+  // ---------- CSV parsing ----------
+  function parseCSV(text) {
+    text = text.replace(/^﻿/, "");
+    const rows = []; let row = [], field = "", q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+        else field += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ",") { row.push(field); field = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(field); field = "";
+        if (row.some(v => v.trim() !== "")) rows.push(row);
+        row = [];
+      } else field += ch;
+    }
+    row.push(field);
+    if (row.some(v => v.trim() !== "")) rows.push(row);
+    return rows;
+  }
+
+  const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
+  function findCol(headers, ...cands) {
+    const h = headers.map(norm);
+    for (const c of cands) { const i = h.indexOf(norm(c)); if (i >= 0) return i; }
+    for (const c of cands) { const i = h.findIndex(x => x.startsWith(norm(c))); if (i >= 0) return i; }
+    return -1;
+  }
+
+  // returns ISO yyyy-mm-dd
+  function parseDate(s) {
+    s = (s || "").trim(); if (!s) return "";
+    let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (m) { let y = +m[3]; if (y < 100) y += 2000; return iso(y, +m[1], +m[2]); }
+    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return iso(+m[1], +m[2], +m[3]);
+    return "";
+  }
+  const pad = (n) => String(n).padStart(2, "0");
+  const iso = (y, mo, d) => `${y}-${pad(mo)}-${pad(d)}`;
+  const fmtUS = (isoStr) => { if (!isoStr) return ""; const [y, m, d] = isoStr.split("-"); return `${+m}/${+d}/${y}`; };
+  function monthStart(isoStr) { const [y, m] = isoStr.split("-"); return `${y}-${m}-01`; }
+  function weekSunday(isoStr) {
+    const [y, m, d] = isoStr.split("-").map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() - dt.getUTCDay());
+    return iso(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+  }
+  function parseAmount(s) {
+    s = (s || "").trim(); if (!s) return NaN;
+    let neg = false;
+    if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+    s = s.replace(/[$,\s]/g, "");
+    let n = parseFloat(s); if (neg) n = -n;
+    return n;
+  }
+  function hash(str) { // FNV-1a 32-bit, twice with different seeds
+    let h1 = 0x811c9dc5, h2 = 0x01000193 ^ 0x5bd1e995;
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 0x01000193); h2 = Math.imul(h2 ^ c, 0x01000193 + 2);
+    }
+    return (h1 >>> 0).toString(16).padStart(8, "0") + (h2 >>> 0).toString(16).padStart(8, "0");
+  }
+
+  let txns = []; // parsed source transactions
+
+  function ingest(text, filename) {
+    const rows = parseCSV(text);
+    if (rows.length < 2) throw new Error(`${filename}: no transactions found`);
+    const hdr = rows[0];
+    const ix = {
+      tdate: findCol(hdr, "Transaction Date", "Date"),
+      cdate: findCol(hdr, "Clearing Date", "Posted Date"),
+      desc: findCol(hdr, "Description"),
+      merch: findCol(hdr, "Merchant"),
+      cat: findCol(hdr, "Category"),
+      type: findCol(hdr, "Type"),
+      amt: findCol(hdr, "Amount (USD)", "Amount"),
+      by: findCol(hdr, "Purchased By")
+    };
+    if (ix.tdate < 0 || ix.amt < 0 || (ix.desc < 0 && ix.merch < 0))
+      throw new Error(`${filename}: doesn't look like an Apple Card export (missing date, amount or description columns)`);
+    const out = [];
+    for (const r of rows.slice(1)) {
+      const get = (i) => (i >= 0 ? (r[i] || "").trim() : "");
+      const amt = parseAmount(get(ix.amt));
+      const tdate = parseDate(get(ix.tdate));
+      if (!tdate || isNaN(amt)) continue;
+      out.push({
+        tdate, cdate: parseDate(get(ix.cdate)) || tdate,
+        desc: get(ix.desc), merch: get(ix.merch) || get(ix.desc),
+        cat: get(ix.cat), type: get(ix.type), amt, by: get(ix.by)
+      });
+    }
+    return out;
+  }
+
+  $("file").addEventListener("change", async (e) => {
+    const files = [...e.target.files]; if (!files.length) return;
+    const st = $("status"); st.className = "status";
+    const added = []; const errs = [];
+    for (const f of files) {
+      try { added.push(...ingest(await f.text(), f.name)); }
+      catch (err) { errs.push(err.message); }
+    }
+    // merge with already-loaded, dropping exact duplicates (same file loaded twice)
+    const seen = new Set(txns.map(key));
+    for (const t of added) { const k = key(t); if (!seen.has(k)) { seen.add(k); txns.push(t); } }
+    txns.sort((a, b) => a.tdate.localeCompare(b.tdate) || a.merch.localeCompare(b.merch));
+    st.textContent = errs.length ? errs.join(" · ") : `Loaded ${files.length} file${files.length > 1 ? "s" : ""}; ${txns.length} transactions total.`;
+    if (errs.length) st.className = "status err";
+    e.target.value = "";
+    render();
+  });
+  const key = (t) => [t.tdate, t.cdate, t.desc, t.amt, t.type, t.by].join("|");
+
+  // ---------- output ----------
+  function buildRows() {
+    const today = new Date();
+    const todayISO = iso(today.getFullYear(), today.getMonth() + 1, today.getDate());
+    const counts = {};
+    let list = txns;
+    if (settings.skipPayments) list = list.filter(t => !/payment/i.test(t.type));
+    const rows = [];
+    for (const t of list) {
+      const d = settings.datesrc === "transaction" ? t.tdate : t.cdate;
+      if (settings.since && d < settings.since) continue;
+      const base = key(t); counts[base] = (counts[base] || 0) + 1;
+      const id = "applecard-" + hash(base + "#" + counts[base]);
+      rows.push({
+        _date: d,
+        "Date": fmtUS(d),
+        "Description": t.merch,
+        "Category": settings.catsrc === "apple" ? t.cat : "",
+        "Amount": Math.round(-t.amt * 100) / 100,
+        "Account": settings.account,
+        "Account #": settings.acctnum,
+        "Institution": settings.institution,
+        "Month": fmtUS(monthStart(d)),
+        "Week": fmtUS(weekSunday(d)),
+        "Transaction ID": id,
+        "Account ID": "",
+        "Check Number": "",
+        "Full Description": t.desc,
+        "Date Added": fmtUS(todayISO)
+      });
+    }
+    rows.sort((a, b) => b._date.localeCompare(a._date)); // newest first, like Tiller
+    return rows;
+  }
+  const activeCols = () => settings.cols.filter(c => c.on).map(c => c.name);
+
+  function render() {
+    const rows = buildRows(); const cols = activeCols();
+    const tbl = $("preview"); tbl.innerHTML = "";
+    const sum = $("summary");
+    if (!txns.length) { sum.textContent = "Load a CSV to see the converted rows."; setButtons(false); return; }
+    const total = rows.reduce((s, r) => s + r.Amount, 0);
+    sum.innerHTML = `<span><b>${rows.length}</b> rows</span><span>Net <b>${money(total)}</b></span>` +
+      (rows.length ? `<span><b>${rows[rows.length - 1].Date}</b> – <b>${rows[0].Date}</b></span>` : "");
+    const thead = tbl.createTHead().insertRow();
+    for (const c of cols) { const th = document.createElement("th"); th.textContent = c; thead.appendChild(th); }
+    const tb = tbl.createTBody();
+    for (const r of rows.slice(0, 300)) {
+      const tr = tb.insertRow();
+      for (const c of cols) {
+        const td = tr.insertCell();
+        if (c === "Amount") { td.textContent = money(r.Amount); td.className = "num " + (r.Amount < 0 ? "neg" : "pos"); }
+        else td.textContent = r[c];
+      }
+    }
+    if (rows.length > 300) { const tr = tb.insertRow(); const td = tr.insertCell(); td.colSpan = cols.length; td.textContent = `…and ${rows.length - 300} more (all included in copy/download)`; }
+    setButtons(rows.length > 0);
+  }
+  const money = (n) => (n < 0 ? "-" : "") + "$" + Math.abs(n).toFixed(2);
+  function setButtons(on) { $("copy").disabled = !on; $("download").disabled = !on; }
+
+  function matrix() {
+    const rows = buildRows(); const cols = activeCols();
+    const lead = settings.blankFirst ? [""] : [];
+    const out = [];
+    if (settings.withHeader) out.push([...lead, ...cols]);
+    for (const r of rows) out.push([...lead, ...cols.map(c => c === "Amount" ? r.Amount.toFixed(2) : r[c])]);
+    return { out, rows };
+  }
+  function markImported(rows) {
+    if (!rows.length) return;
+    settings.lastImportDate = rows[0]._date; save(); showLastImport();
+  }
+
+  $("copy").addEventListener("click", async () => {
+    const { out, rows } = matrix();
+    const tsv = out.map(r => r.map(v => String(v).replace(/[\t\r\n]+/g, " ")).join("\t")).join("\n");
+    try { await navigator.clipboard.writeText(tsv); }
+    catch {
+      const ta = document.createElement("textarea"); ta.value = tsv; document.body.appendChild(ta);
+      ta.select(); document.execCommand("copy"); ta.remove();
+    }
+    markImported(rows);
+    toast(`Copied ${rows.length} rows`);
+  });
+
+  $("download").addEventListener("click", () => {
+    const { out, rows } = matrix();
+    const csv = out.map(r => r.map(v => { v = String(v); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }).join(",")).join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `tiller-apple-card-${rows.length ? rows[rows.length - 1]._date + "_to_" + rows[0]._date : "export"}.csv`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    markImported(rows);
+  });
+
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 1800); }
+
+  render();
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+})();
+</script>
+</body>
+</html>
